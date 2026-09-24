@@ -56,7 +56,7 @@ jobs:
         working-directory: source
         env:
           NEXT_PUBLIC_SITE_URL: https://reactive-skills.github.io
-          NEXT_PUBLIC_BASE_PATH: /
+          NEXT_PUBLIC_ROOT_SITE: "true"
           GITHUB_PAGES: "true"
         run: pnpm --filter @reactive-skills/site build
 
