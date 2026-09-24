@@ -1,0 +1,77 @@
+name: Deploy Reactive Skills site
+
+on:
+  repository_dispatch:
+    types:
+      - source-updated
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Source repository ref to build
+        required: false
+        default: main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          repository: Reactive-Skills/reactive-skills
+          ref: ${{ github.event.client_payload.source_ref || inputs.source_ref || 'main' }}
+          path: source
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Install dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+
+      - name: Build documentation site
+        working-directory: source
+        env:
+          NEXT_PUBLIC_SITE_URL: https://reactive-skills.github.io
+          NEXT_PUBLIC_BASE_PATH: /
+          GITHUB_PAGES: "true"
+        run: pnpm --filter @reactive-skills/site build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: source/apps/site/out
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
