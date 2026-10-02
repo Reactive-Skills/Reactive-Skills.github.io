@@ -31,6 +31,13 @@ jobs:
           ref: ${{ github.event.client_payload.source_ref || inputs.source_ref || 'main' }}
           path: source
 
+      - name: Checkout published skill registry
+        uses: actions/checkout@v4
+        with:
+          repository: Reactive-Skills/skills
+          ref: main
+          path: skills
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -51,6 +58,27 @@ jobs:
       - name: Install dependencies
         working-directory: source
         run: pnpm install --frozen-lockfile
+
+      - name: Synchronize published skill registry
+        working-directory: source
+        run: pnpm run sync:registry
+
+      - name: Verify generated registry membership
+        working-directory: source
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import { registrySkills } from './apps/site/src/infrastructure/content/registry/skills.js';
+          const published = fs.readdirSync('../skills', { withFileTypes: true })
+            .filter(entry => entry.isDirectory() && fs.existsSync(`../skills/${entry.name}/skill.yaml`))
+            .map(entry => entry.name)
+            .sort();
+          assert(published.length > 0, 'Published skill registry is empty');
+          assert.deepEqual(registrySkills.map(skill => skill.slug).sort(), published,
+            'Generated registry must contain every published skill exactly once');
+          console.log(`Verified ${published.length} published skills`);
+          NODE
 
       - name: Build documentation site
         working-directory: source
