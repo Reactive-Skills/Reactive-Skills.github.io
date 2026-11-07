@@ -83,10 +83,30 @@ jobs:
       - name: Build documentation site
         working-directory: source
         env:
-          NEXT_PUBLIC_SITE_URL: https://reactive-skills.github.io
+          NEXT_PUBLIC_SITE_URL: https://reactive-skills.com
           NEXT_PUBLIC_ROOT_SITE: "true"
           GITHUB_PAGES: "true"
         run: pnpm --filter @reactive-skills/site build
+
+      - name: Verify site URLs use the custom domain
+        working-directory: source/apps/site/out
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          const origin = 'https://reactive-skills.com';
+          const html = fs.readFileSync('index.html', 'utf8');
+          const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
+          assert.equal(canonical, `${origin}/`, 'index.html canonical');
+          const ogUrl = html.match(/<meta property="og:url" content="([^"]+)"/)?.[1];
+          assert.equal(ogUrl, `${origin}/`, 'index.html og:url');
+          const locs = [...fs.readFileSync('sitemap.xml', 'utf8').matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
+          assert(locs.length > 0, 'sitemap.xml has no <loc> entries');
+          for (const loc of locs) assert(loc.startsWith(`${origin}/`), `sitemap.xml <loc> ${loc}`);
+          const robots = fs.readFileSync('robots.txt', 'utf8');
+          assert.match(robots, /^Sitemap: https:\/\/reactive-skills\.com\/sitemap\.xml$/m, 'robots.txt Sitemap');
+          console.log(`Verified canonical, og:url, robots and ${locs.length} sitemap URLs on ${origin}`);
+          NODE
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
